@@ -1,0 +1,142 @@
+-- Question 1
+SELECT COUNT(DISTINCT(id)) number_of_accounts FROM accounts;
+
+--QUestion 2
+SELECT COUNT(DISTINCT(r.name)) nmr_sales_regions FROM sales_reps sr
+JOIN region r
+ON  sr.region_id=r.id;
+
+SELECT DISTINCT(r.name) FROM sales_reps sr
+JOIN region r
+ON  sr.region_id=r.id;
+
+--Question 3a
+WITH qty_summary AS (
+	SELECT
+	SUM(standard_qty) sum_standard,
+	SUM(poster_qty) sum_poster,
+	SUM(gloss_qty) sum_gloss,
+	SUM(total) total_qty
+	FROM orders
+)
+
+SELECT
+sum_standard/total_qty::float standard_qty_perc,
+sum_poster/total_qty::float poster_qty_perc,
+sum_gloss/total_qty::float gloss_qty_perc
+FROM qty_summary;
+
+--Question 3b
+WITH rev_summary AS (
+	SELECT
+	SUM(standard_amt_usd) sum_rev_standard,
+	SUM(poster_amt_usd) sum_rev_poster,
+	SUM(gloss_amt_usd) sum_rev_gloss,
+	SUM(total_amt_usd) total_rev
+	FROM orders
+)
+
+SELECT
+sum_rev_standard/total_rev::float standard_rev_perc,
+sum_rev_poster/total_rev::float poster_rev_perc,
+sum_rev_gloss/total_rev::float gloss_rev_perc
+FROM rev_summary;
+
+-- QUestion 4a
+SELECT EXTRACT(YEAR FROM occurred_at) AS year, SUM(total_amt_usd) AS total_rev
+FROM orders
+WHERE EXTRACT(YEAR FROM occurred_at) BETWEEN 2014 AND 2016
+GROUP BY year
+ORDER BY year;
+
+-- Question 4b
+SELECT
+  EXTRACT(YEAR FROM occurred_at) AS year,
+  SUM(standard_qty + gloss_qty + poster_qty) AS total_units_sold
+FROM orders
+WHERE EXTRACT(YEAR FROM occurred_at) NOT IN (2013, 2017)
+GROUP BY year
+ORDER BY year;
+
+-- Question 5
+SELECT r.name region_name, COUNT(sr.id) sales_rep_region
+FROM region r
+LEFT JOIN sales_reps sr ON r.id = sr.region_id AND r.id <> 8
+GROUP BY r.name
+ORDER BY r.name
+
+-- Question 6a
+select r.name,
+count(distinct o.id) as total_orders,
+count(distinct sr.id) as num_of_reps,
+count(distinct a.id) as num_of_accounts,
+sum(o.total_amt_usd) as total_revenue,
+avg(o.total_amt_usd) as avg_revenue from region r
+join sales_reps sr
+on r.id = sr.region_id
+join accounts a
+on sr.id = a.sales_rep_id
+right join orders o
+on a.id = o.account_id
+where EXTRACT(YEAR FROM occurred_at) = 2016 --a.id in (select account_id from orders where occurred_at = 2016) 
+group by r.name
+order by r.name;
+
+-- Question 6b
+select r.name,
+--count(distinct o.id) as total_orders,
+--count(distinct sr.id) as num_of_reps,
+--count(distinct a.id) as num_of_accounts,
+--sum(o.total_amt_usd) as total_revenue,
+--avg(o.total_amt_usd) as avg_revenue,
+count(distinct o.id) / count(distinct sr.id) as avg_orders_per_rep,
+count(distinct a.id) / count(distinct sr.id) as avg_accounts_per_rep,
+sum(o.total_amt_usd) / count(distinct sr.id) as avg_revenue_per_rep
+from region r
+join sales_reps sr
+on r.id = sr.region_id
+join accounts a
+on sr.id = a.sales_rep_id
+right join orders o
+on a.id = o.account_id
+where EXTRACT(YEAR FROM occurred_at) = 2016 
+group by r.name
+order by r.name
+
+SELECT channel FROM web_events
+group by channel;
+
+--Question 7
+select a.name,
+		case 
+			when a.name ilike '%group' THEN 'group'
+			else 'not group'
+		end as account_type
+from accounts a;
+
+
+select account_type, avg(total_amt_usd) as average_revenue 
+from (select a.id,a.name,o.total_amt_usd,
+		case 
+			when a.name ilike '%group' THEN 'group'
+			else 'not group'
+		end as account_type
+from accounts a
+join orders o on a.id = o.account_id 
+where o.id is not null) 
+accont_orders
+group by account_type;
+
+
+-- Question 8
+with channelusage as (
+select r.name as region_name, w.channel, count(w.channel) channel_count, row_number() over (partition by r.name order by count(w.channel)) channel_rank
+from web_events w
+join accounts a on w.account_id = a.id
+join sales_reps sr on a.sales_rep_id = sr.id
+join region r on sr.region_id = r.id
+group by r.name, w.channel)
+
+select region_name, channel
+from channelusage
+where channel_rank = 1
